@@ -28,6 +28,8 @@ To use rmami, add a provisioner like this:
 }
 ```
 
+You may also provide your aws access_key and secret_key via the other usual means: environment variables or ~/.aws/credentials.
+
 
 ### Building and installation
 
