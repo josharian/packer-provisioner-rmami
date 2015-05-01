@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/awslabs/aws-sdk-go/aws"
+	"github.com/awslabs/aws-sdk-go/aws/awsutil"
 	"github.com/awslabs/aws-sdk-go/service/ec2"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
@@ -91,6 +92,10 @@ func sayf(ui packer.Ui, msg string, v ...interface{}) {
 	ui.Say(fmt.Sprintf(msg, v...))
 }
 
+// Provision runs the provisioner.
+// This provisioner is optional and best-effort.
+// We don't want failures here to prevent builds from succeeding.
+// Therefore, in case of error, complain via ui, but return a nil error.
 func (p *plan) Provision(ui packer.Ui, comm packer.Communicator) error {
 	sayf(ui, "Searching for AMIs in %q belonging to owner %q with tagged role %q", p.Region, p.Owner, p.Role)
 
@@ -113,14 +118,16 @@ func (p *plan) Provision(ui packer.Ui, comm packer.Communicator) error {
 
 	resp, err := svc.DescribeImages(&in)
 	if err != nil {
-		return err
+		sayf(ui, "!!! rmami failed: API call to find AMIs failed: %v", err)
+		return nil
 	}
 
 	var imgs images
 	for _, img := range resp.Images {
 		i, err := newImage(img)
 		if err != nil {
-			return err
+			sayf(ui, "!!! rmami failed: could not interpret AMI %v: %v", awsutil.StringValue(img), err)
+			return nil
 		}
 		imgs = append(imgs, i)
 	}
@@ -145,7 +152,8 @@ func (p *plan) Provision(ui packer.Ui, comm packer.Communicator) error {
 			if err := img.delete(ui, svc); err != nil {
 				// Don't bother trying to accumulate multiple errors.
 				// If one fails, the others probably will too.
-				return err
+				sayf(ui, "!!! rmami failed: could not delete AMI %v: %v", img.id, err)
+				return nil
 			}
 		}
 	}
